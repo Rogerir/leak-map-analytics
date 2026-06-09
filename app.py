@@ -45,7 +45,6 @@ app.layout = html.Div(
                         'borderRadius': '8px',
                         'display': 'flex',
                         'flexDirection': 'column',
-                        'justifyContent': 'center',
                         'border': '1px solid #2a2a2a'
                     },
                     children=[
@@ -74,7 +73,6 @@ app.layout = html.Div(
 
                         html.H4("CONTEXTO LEGAL",
                                 style={'color': '#ff5555', 'margin': '0 0 10px 0', 'letterSpacing': '1px'}),
-
                         html.Div(
                             id='status-lgpd',
                             style={'fontSize': '13px', 'lineHeight': '1.6', 'textAlign': 'left'}
@@ -83,17 +81,39 @@ app.layout = html.Div(
                 ),
 
                 html.Div(
-                    style={
-                        'backgroundColor': '#1e1e1e',
-                        'padding': '10px',
-                        'borderRadius': '8px',
-                        'border': '1px solid #2a2a2a',
-                        'height': '550px'
-                    },
+                    style={'display': 'flex', 'flexDirection': 'column', 'gap': '20px'},
                     children=[
-                        dcc.Graph(
-                            id='mapa-vazamentos-temporal',
-                            style={'height': '100%', 'width': '100%'}
+                        # Bloco do Mapa
+                        html.Div(
+                            style={
+                                'backgroundColor': '#1e1e1e',
+                                'padding': '10px',
+                                'borderRadius': '8px',
+                                'border': '1px solid #2a2a2a',
+                                'height': '450px'
+                            },
+                            children=[
+                                dcc.Graph(
+                                    id='mapa-vazamentos-temporal',
+                                    style={'height': '100%', 'width': '100%'}
+                                )
+                            ]
+                        ),
+
+                        html.Div(
+                            style={
+                                'backgroundColor': '#1e1e1e',
+                                'padding': '15px',
+                                'borderRadius': '8px',
+                                'border': '1px solid #2a2a2a',
+                                'height': '300px'
+                            },
+                            children=[
+                                dcc.Graph(
+                                    id='grafico-top5-estados',
+                                    style={'height': '100%', 'width': '100%'}
+                                )
+                            ]
                         )
                     ]
                 )
@@ -103,8 +123,10 @@ app.layout = html.Div(
     ]
 )
 
+
 @app.callback(
     [Output('mapa-vazamentos-temporal', 'figure'),
+     Output('grafico-top5-estados', 'figure'),
      Output('status-lgpd', 'children'),
      Output('status-lgpd', 'style')],
     [Input('slider-anos', 'value')]
@@ -112,11 +134,13 @@ app.layout = html.Div(
 def atualizar_painel(ano_selecionado):
     df_filtrado = df_historico[df_historico['Ano'] == ano_selecionado]
 
+    df_top5 = df_filtrado.nlargest(5, 'Incidentes').sort_values('Incidentes', ascending=True)
+
     if ano_selecionado < 2020:
         texto_lgpd = f"Ano {ano_selecionado}: Cenário Pré-LGPD. Ausência de uma legislação nacional centralizada de proteção e fiscalização, resultando em menor controle corporativo de dados expostos."
         cor_status = {'color': '#ffaa00', 'fontWeight': '500'}
     elif ano_selecionado in [2020, 2021]:
-        texto_lgpd = f"Ano {ano_selecionado}: Vigência da LGPD. Há uma explosão nas notificações e relatórios de incidentes, pois as empresas passam a ser juridicamente obrigadas a reportar vazamentos à ANPD."
+        texto_lgpd = f"Ano {ano_selecionado}: Vigência da LGPD. Em vigor no Brasil, há uma explosão nas notificações e relatórios de incidentes, pois as empresas passam a ser juridicamente obrigadas a reportar vazamentos à ANPD."
         cor_status = {'color': '#ff5555', 'fontWeight': '500'}
     else:
         texto_lgpd = f"Ano {ano_selecionado}: Cenário Pós-LGPD. Fase de maturação legal, adequação maciça dos sistemas empresariais às políticas de governança e estabilização de incidentes severos."
@@ -132,7 +156,7 @@ def atualizar_painel(ano_selecionado):
         range_color=[0, 80],
         map_style="carto-darkmatter",
         center={"lat": -14.235, "lon": -53.925},
-        zoom=3.3,
+        zoom=3.1,
         opacity=0.75,
         labels={"Incidentes": "Vazamentos"},
         title=f"Distribuição Geográfica de Incidentes - Ano {ano_selecionado}"
@@ -145,7 +169,30 @@ def atualizar_painel(ano_selecionado):
         font_color="#f5f5f5"
     )
 
-    return fig_mapa, texto_lgpd, cor_status
+    fig_barras = px.bar(
+        df_top5,
+        x="Incidentes",
+        y="Estado",
+        orientation="h",
+        color="Incidentes",
+        color_continuous_scale="Reds",
+        range_x=[0, 80],
+        range_color=[0, 80],
+        title=f"Top 5 Estados com Maior Volume Crítico - Ano {ano_selecionado}"
+    )
+
+    fig_barras.update_layout(
+        margin={"r": 20, "t": 40, "l": 10, "b": 20},
+        paper_bgcolor="#1e1e1e",
+        plot_bgcolor="#1e1e1e",
+        font_color="#f5f5f5",
+        showlegend=False,
+        coloraxis_showscale=False,
+        xaxis_title="Total de Incidentes Notificados",
+        yaxis_title=""
+    )
+
+    return fig_mapa, fig_barras, texto_lgpd, cor_status
 
 
 if __name__ == '__main__':
