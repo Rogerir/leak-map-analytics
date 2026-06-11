@@ -4,6 +4,7 @@ import plotly.express as px
 
 app = Dash(__name__)
 
+# Carregando os dados gerados pelo novo script
 df_historico = pd.read_csv('data/vazamentos_brasil.csv')
 
 URL_GEOJSON_BRASIL = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson"
@@ -37,7 +38,7 @@ app.layout = html.Div(
         html.Div(
             style={'display': 'grid', 'gridTemplateColumns': '1fr 3fr', 'gap': '20px'},
             children=[
-
+                # Coluna Esquerda: Controles
                 html.Div(
                     style={
                         'backgroundColor': '#1e1e1e',
@@ -60,11 +61,12 @@ app.layout = html.Div(
                                     id='slider-anos',
                                     min=df_historico['Ano'].min(),
                                     max=df_historico['Ano'].max(),
-                                    value=2018,
+                                    value=df_historico['Ano'].min(),
                                     marks={
                                         str(ano): {'label': str(ano), 'style': {'color': '#888888', 'fontSize': '11px'}}
                                         for ano in df_historico['Ano'].unique()},
-                                    step=1
+                                    step=1,
+                                    included=False
                                 ),
                             ]
                         ),
@@ -80,10 +82,11 @@ app.layout = html.Div(
                     ]
                 ),
 
+                # Coluna Direita: Visualizações
                 html.Div(
                     style={'display': 'flex', 'flexDirection': 'column', 'gap': '20px'},
                     children=[
-                        # Bloco do Mapa
+                        # Visão 1: Mapa (Ocupando a largura total da coluna direita)
                         html.Div(
                             style={
                                 'backgroundColor': '#1e1e1e',
@@ -100,24 +103,46 @@ app.layout = html.Div(
                             ]
                         ),
 
+                        # Container inferior dividido em 2 para as Visões 2 e 3
                         html.Div(
-                            style={
-                                'backgroundColor': '#1e1e1e',
-                                'padding': '15px',
-                                'borderRadius': '8px',
-                                'border': '1px solid #2a2a2a',
-                                'height': '300px'
-                            },
+                            style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '20px'},
                             children=[
-                                dcc.Graph(
-                                    id='grafico-top5-estados',
-                                    style={'height': '100%', 'width': '100%'}
+                                # Visão 2: Top 5 Estados
+                                html.Div(
+                                    style={
+                                        'backgroundColor': '#1e1e1e',
+                                        'padding': '15px',
+                                        'borderRadius': '8px',
+                                        'border': '1px solid #2a2a2a',
+                                        'height': '300px'
+                                    },
+                                    children=[
+                                        dcc.Graph(
+                                            id='grafico-top5-estados',
+                                            style={'height': '100%', 'width': '100%'}
+                                        )
+                                    ]
+                                ),
+                                # Visão 3: Evolução Temporal Nacional
+                                html.Div(
+                                    style={
+                                        'backgroundColor': '#1e1e1e',
+                                        'padding': '15px',
+                                        'borderRadius': '8px',
+                                        'border': '1px solid #2a2a2a',
+                                        'height': '300px'
+                                    },
+                                    children=[
+                                        dcc.Graph(
+                                            id='grafico-evolucao-nacional',
+                                            style={'height': '100%', 'width': '100%'}
+                                        )
+                                    ]
                                 )
                             ]
                         )
                     ]
                 )
-
             ]
         )
     ]
@@ -127,15 +152,22 @@ app.layout = html.Div(
 @app.callback(
     [Output('mapa-vazamentos-temporal', 'figure'),
      Output('grafico-top5-estados', 'figure'),
+     Output('grafico-evolucao-nacional', 'figure'),
      Output('status-lgpd', 'children'),
      Output('status-lgpd', 'style')],
     [Input('slider-anos', 'value')]
 )
 def atualizar_painel(ano_selecionado):
+    # Filtro para Mapa e Top 5
     df_filtrado = df_historico[df_historico['Ano'] == ano_selecionado]
 
+    # Preparando dados para Top 5
     df_top5 = df_filtrado.nlargest(5, 'Incidentes').sort_values('Incidentes', ascending=True)
 
+    # Preparando dados para a Evolução (agrupando todos os anos)
+    df_evolucao = df_historico.groupby('Ano', as_index=False)['Incidentes'].sum()
+
+    # Textos Dinâmicos da LGPD
     if ano_selecionado < 2020:
         texto_lgpd = f"Ano {ano_selecionado}: Cenário Pré-LGPD. Ausência de uma legislação nacional centralizada de proteção e fiscalização, resultando em menor controle corporativo de dados expostos."
         cor_status = {'color': '#ffaa00', 'fontWeight': '500'}
@@ -146,6 +178,8 @@ def atualizar_painel(ano_selecionado):
         texto_lgpd = f"Ano {ano_selecionado}: Cenário Pós-LGPD. Fase de maturação legal, adequação maciça dos sistemas empresariais às políticas de governança e estabilização de incidentes severos."
         cor_status = {'color': '#00ff77', 'fontWeight': '500'}
 
+    # 1. Figura do Mapa
+    max_incidentes = df_historico['Incidentes'].max()
     fig_mapa = px.choropleth_map(
         df_filtrado,
         geojson=URL_GEOJSON_BRASIL,
@@ -153,22 +187,20 @@ def atualizar_painel(ano_selecionado):
         featureidkey="properties.name",
         color="Incidentes",
         color_continuous_scale="Reds",
-        range_color=[0, 80],
+        range_color=[0, max_incidentes],
         map_style="carto-darkmatter",
         center={"lat": -14.235, "lon": -53.925},
         zoom=3.1,
         opacity=0.75,
         labels={"Incidentes": "Vazamentos"},
-        title=f"Distribuição Geográfica de Incidentes - Ano {ano_selecionado}"
+        title=f"Distribuição Geográfica - Ano {ano_selecionado}"
     )
-
     fig_mapa.update_layout(
         margin={"r": 10, "t": 40, "l": 10, "b": 10},
-        paper_bgcolor="#1e1e1e",
-        plot_bgcolor="#1e1e1e",
-        font_color="#f5f5f5"
+        paper_bgcolor="#1e1e1e", plot_bgcolor="#1e1e1e", font_color="#f5f5f5"
     )
 
+    # 2. Figura do Gráfico de Barras (Top 5)
     fig_barras = px.bar(
         df_top5,
         x="Incidentes",
@@ -176,23 +208,36 @@ def atualizar_painel(ano_selecionado):
         orientation="h",
         color="Incidentes",
         color_continuous_scale="Reds",
-        range_x=[0, 80],
-        range_color=[0, 80],
-        title=f"Top 5 Estados com Maior Volume Crítico - Ano {ano_selecionado}"
+        range_color=[0, max_incidentes],
+        title=f"Top 5 Estados - Ano {ano_selecionado}"
     )
-
     fig_barras.update_layout(
         margin={"r": 20, "t": 40, "l": 10, "b": 20},
-        paper_bgcolor="#1e1e1e",
-        plot_bgcolor="#1e1e1e",
-        font_color="#f5f5f5",
-        showlegend=False,
-        coloraxis_showscale=False,
-        xaxis_title="Total de Incidentes Notificados",
-        yaxis_title=""
+        paper_bgcolor="#1e1e1e", plot_bgcolor="#1e1e1e", font_color="#f5f5f5",
+        showlegend=False, coloraxis_showscale=False,
+        xaxis_title="Incidentes Notificados", yaxis_title=""
     )
 
-    return fig_mapa, fig_barras, texto_lgpd, cor_status
+    # 3. Figura do Gráfico de Linha (Evolução)
+    fig_linha = px.line(
+        df_evolucao,
+        x="Ano",
+        y="Incidentes",
+        markers=True,
+        title="Evolução Nacional (Total de Vazamentos)"
+    )
+    fig_linha.update_traces(line_color='#ff5555', marker=dict(size=8, color='#ffaa00'))
+
+    # Destacando o ano selecionado no gráfico de linha
+    fig_linha.add_vline(x=ano_selecionado, line_width=2, line_dash="dash", line_color="#00ff77")
+
+    fig_linha.update_layout(
+        margin={"r": 20, "t": 40, "l": 10, "b": 20},
+        paper_bgcolor="#1e1e1e", plot_bgcolor="#1e1e1e", font_color="#f5f5f5",
+        xaxis_title="", yaxis_title="Total Incidentes"
+    )
+
+    return fig_mapa, fig_barras, fig_linha, texto_lgpd, cor_status
 
 
 if __name__ == '__main__':
