@@ -1,110 +1,132 @@
 from dash import Dash, html, dcc, Input, Output
 import pandas as pd
 import plotly.express as px
+import requests
 
 app = Dash(__name__)
 
-df_historico = pd.read_csv('data/vazamentos_brasil.csv')
-URL_GEOJSON_BRASIL = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson"
+# 1. Carregamento de Dados
+df_jobs = pd.read_csv('data/AI_Impact_on_Jobs_2030.csv')
 
+# Conversões para facilitar o entendimento (0 a 1 vira 0 a 100%)
+df_jobs['Risco_IA_Porcentagem'] = df_jobs['AI_Replacement_Risk'] * 100
+df_jobs['Demanda_Porcentagem'] = df_jobs['Future_Demand_Score'] * 100
+
+# Simplificando a classificação da IA
+mapa_vulnerabilidade = {'Low': 'Baixo Risco', 'Medium': 'Risco Médio', 'High': 'Alto Risco'}
+df_jobs['Impacto_da_IA'] = df_jobs['Automation_Level'].map(mapa_vulnerabilidade)
+
+
+# 2. Integração com API Externa (Cotação Dólar)
+def obter_cotacao_usd():
+    try:
+        response = requests.get("https://economia.awesomeapi.com.br/last/USD-BRL", timeout=5)
+        return float(response.json()['USDBRL']['bid'])
+    except:
+        return 5.00  # Fallback
+
+
+usd_hoje = obter_cotacao_usd()
+
+# Estrutura de Layout Direta
 app.layout = html.Div(
     id='main-container',
-    style={'padding': '20px 40px', 'fontFamily': 'Arial, sans-serif', 'minHeight': '100vh', 'transition': '0.3s'},
+    style={'padding': '30px 40px', 'fontFamily': 'system-ui, sans-serif', 'minHeight': '100vh',
+           'transition': 'all 0.3s'},
     children=[
-        # Cabeçalho com Botão de Tema
+        # Cabeçalho
         html.Div(
             style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center',
-                   'marginBottom': '20px'},
+                   'marginBottom': '30px'},
             children=[
-                html.Div(
-                    children=[
-                        html.H1("Painel Analítico de Incidentes LGPD",
-                                style={'margin': '0 0 8px 0', 'fontSize': '28px'}),
-                        html.P("Análise Histórica de Vazamentos de Dados no Cenário Nacional (2018-2023)",
-                               style={'margin': '0', 'fontSize': '15px', 'color': '#888888'}),
-                    ]
-                ),
+                html.Div([
+                    html.H1("O Futuro dos Empregos com a IA",
+                            style={'margin': '0 0 6px 0', 'fontSize': '30px', 'fontWeight': '700'}),
+                    html.P("Quais profissões sobrevivem, quanto pagam e o que precisamos aprender até 2030.",
+                           style={'margin': '0', 'fontSize': '15px', 'color': '#64748b'}),
+                ]),
                 html.Button(
-                    id='theme-toggle',
-                    n_clicks=0,
-                    style={
-                        'padding': '10px 20px', 'borderRadius': '20px', 'border': 'none',
-                        'cursor': 'pointer', 'fontWeight': 'bold', 'transition': '0.3s'
-                    }
+                    id='theme-toggle', n_clicks=0,
+                    style={'padding': '10px 20px', 'borderRadius': '8px', 'border': '1px solid', 'cursor': 'pointer',
+                           'fontWeight': '600'}
                 )
             ]
         ),
 
-        html.Hr(
-            style={'borderColor': '#888888', 'marginBottom': '25px', 'borderStyle': 'solid', 'borderWidth': '1px 0 0 0',
-                   'opacity': '0.2'}),
-
+        # Linha de Resumo (Cards)
         html.Div(
-            style={'display': 'grid', 'gridTemplateColumns': '1fr 3fr', 'gap': '20px'},
+            style={'display': 'flex', 'gap': '24px', 'marginBottom': '30px', 'flexWrap': 'wrap'},
             children=[
-                # Coluna Esquerda: Controles
+                html.Div(id='card-total',
+                         style={'flex': '1', 'minWidth': '250px', 'padding': '24px', 'borderRadius': '12px'}),
+                html.Div(id='card-risk',
+                         style={'flex': '1', 'minWidth': '250px', 'padding': '24px', 'borderRadius': '12px'}),
+                html.Div(id='card-usd',
+                         style={'flex': '1', 'minWidth': '250px', 'padding': '24px', 'borderRadius': '12px'})
+            ]
+        ),
+
+        # Corpo do Painel
+        html.Div(
+            style={'display': 'grid', 'gridTemplateColumns': '1fr 3fr', 'gap': '24px'},
+            children=[
+                # Filtros Esquerdo
                 html.Div(
                     id='panel-left',
-                    style={'padding': '25px', 'borderRadius': '6px', 'display': 'flex', 'flexDirection': 'column',
-                           'transition': '0.3s'},
+                    style={'padding': '24px', 'borderRadius': '12px', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
-                        html.H4("FILTRO TEMPORAL", style={'margin': '0 0 10px 0', 'fontSize': '14px'}),
-                        html.P("Selecione o ano base para atualizar as visualizações ao lado:",
-                               style={'fontSize': '13px', 'marginBottom': '40px', 'color': '#888888'}),
+                        html.H4("ESCOLHA A ÁREA DE ATUAÇÃO",
+                                style={'margin': '0 0 12px 0', 'fontSize': '13px', 'fontWeight': '700'}),
+                        html.P("Veja como a IA afeta este setor específico:",
+                               style={'fontSize': '13px', 'marginBottom': '15px'}),
 
                         html.Div(
-                            style={'padding': '0 5px'},
+                            style={'marginBottom': '30px'},
                             children=[
-                                dcc.Slider(
-                                    id='slider-anos',
-                                    min=df_historico['Ano'].min(),
-                                    max=df_historico['Ano'].max(),
-                                    value=df_historico['Ano'].min(),
-                                    marks={
-                                        str(ano): {'label': str(ano), 'style': {'color': '#888888', 'fontSize': '12px'}}
-                                        for ano in df_historico['Ano'].unique()},
-                                    step=1,
-                                    included=False
+                                dcc.Dropdown(
+                                    id='drop-industry',
+                                    options=[{'label': ind, 'value': ind} for ind in
+                                             sorted(df_jobs['Industry'].unique())],
+                                    value=sorted(df_jobs['Industry'].unique())[0],
+                                    clearable=False,
+                                    style={'color': '#0f172a'}
                                 ),
                             ]
                         ),
 
-                        html.Hr(style={'borderColor': '#888888', 'margin': '40px 0 20px 0', 'borderStyle': 'solid',
-                                       'opacity': '0.2'}),
+                        html.Hr(
+                            style={'margin': '20px 0', 'border': 'none', 'borderTop': '1px solid', 'opacity': '0.1'}),
 
-                        html.H4("CONTEXTO REGULATÓRIO", style={'margin': '0 0 15px 0', 'fontSize': '14px'}),
-                        html.Div(id='status-lgpd')
+                        html.H4("ALERTA DE ESTUDOS",
+                                style={'margin': '0 0 12px 0', 'fontSize': '13px', 'fontWeight': '700'}),
+                        html.Div(id='status-upskill')
                     ]
                 ),
 
-                # Coluna Direita: Visualizações
+                # Gráficos (Direita)
                 html.Div(
-                    style={'display': 'flex', 'flexDirection': 'column', 'gap': '20px'},
+                    style={'display': 'flex', 'flexDirection': 'column', 'gap': '24px'},
                     children=[
                         html.Div(
-                            id='panel-map',
-                            style={'padding': '15px', 'borderRadius': '6px', 'height': '450px', 'transition': '0.3s'},
-                            children=[
-                                dcc.Graph(id='mapa-vazamentos-temporal', style={'height': '100%', 'width': '100%'},
-                                          config={'displayModeBar': False})]
+                            id='panel-matriz',
+                            style={'padding': '20px', 'borderRadius': '12px', 'height': '400px'},
+                            children=[dcc.Graph(id='grafico-matriz', style={'height': '100%', 'width': '100%'},
+                                                config={'displayModeBar': False})]
                         ),
                         html.Div(
-                            style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '20px'},
+                            style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '24px'},
                             children=[
                                 html.Div(
-                                    id='panel-top5',
-                                    style={'padding': '15px', 'borderRadius': '6px', 'height': '320px',
-                                           'transition': '0.3s'},
+                                    id='panel-top-jobs',
+                                    style={'padding': '20px', 'borderRadius': '12px', 'height': '360px'},
                                     children=[
-                                        dcc.Graph(id='grafico-top5-estados', style={'height': '100%', 'width': '100%'},
+                                        dcc.Graph(id='grafico-top-jobs', style={'height': '100%', 'width': '100%'},
                                                   config={'displayModeBar': False})]
                                 ),
                                 html.Div(
-                                    id='panel-evolucao',
-                                    style={'padding': '15px', 'borderRadius': '6px', 'height': '320px',
-                                           'transition': '0.3s'},
-                                    children=[dcc.Graph(id='grafico-evolucao-nacional',
-                                                        style={'height': '100%', 'width': '100%'},
+                                    id='panel-skills',
+                                    style={'padding': '20px', 'borderRadius': '12px', 'height': '360px'},
+                                    children=[dcc.Graph(id='grafico-skills', style={'height': '100%', 'width': '100%'},
                                                         config={'displayModeBar': False})]
                                 )
                             ]
@@ -118,99 +140,164 @@ app.layout = html.Div(
 
 
 @app.callback(
-    [Output('mapa-vazamentos-temporal', 'figure'),
-     Output('grafico-top5-estados', 'figure'),
-     Output('grafico-evolucao-nacional', 'figure'),
-     Output('status-lgpd', 'children'),
-     Output('status-lgpd', 'style'),
+    [Output('grafico-matriz', 'figure'),
+     Output('grafico-top-jobs', 'figure'),
+     Output('grafico-skills', 'figure'),
+     Output('status-upskill', 'children'),
+     Output('status-upskill', 'style'),
+     Output('card-total', 'children'),
+     Output('card-total', 'style'),
+     Output('card-risk', 'children'),
+     Output('card-risk', 'style'),
+     Output('card-usd', 'children'),
+     Output('card-usd', 'style'),
      Output('main-container', 'style'),
      Output('panel-left', 'style'),
-     Output('panel-map', 'style'),
-     Output('panel-top5', 'style'),
-     Output('panel-evolucao', 'style'),
+     Output('panel-matriz', 'style'),
+     Output('panel-top-jobs', 'style'),
+     Output('panel-skills', 'style'),
      Output('theme-toggle', 'children'),
      Output('theme-toggle', 'style')],
-    [Input('slider-anos', 'value'),
+    [Input('drop-industry', 'value'),
      Input('theme-toggle', 'n_clicks')]
 )
-def atualizar_painel(ano_selecionado, theme_clicks):
-    # Lógica de Tema
+def atualizar_painel(industry_selecionada, theme_clicks):
     is_dark = theme_clicks % 2 != 0
 
+    # Cores
     if is_dark:
-        tema = {
-            'bg_page': '#14181c', 'bg_panel': '#1e2329', 'border': '#2d333b',
-            'text': '#c9d1d9', 'accent': '#58a6ff', 'map': 'carto-darkmatter'
-        }
-        btn_text = '☀️ Light Mode'
-        btn_style = {'backgroundColor': '#2d333b', 'color': '#c9d1d9'}
+        tema = {'bg_page': '#0f172a', 'bg_panel': '#1e293b', 'border': '#334155', 'text': '#f8fafc',
+                'text_muted': '#94a3b8', 'accent': '#8b5cf6', 'card_bg': '#1e293b'}
+        btn_text = '☀️ Modo Claro'
+        btn_style = {'backgroundColor': '#334155', 'color': '#f8fafc', 'borderColor': '#475569'}
     else:
-        tema = {
-            'bg_page': '#f4f6f9', 'bg_panel': '#ffffff', 'border': '#e0e0e0',
-            'text': '#2c3e50', 'accent': '#0056b3', 'map': 'carto-positron'
+        tema = {'bg_page': '#f1f5f9', 'bg_panel': '#ffffff', 'border': '#e2e8f0', 'text': '#0f172a',
+                'text_muted': '#64748b', 'accent': '#6366f1', 'card_bg': '#ffffff'}
+        btn_text = '🌙 Modo Escuro'
+        btn_style = {'backgroundColor': '#ffffff', 'color': '#0f172a', 'borderColor': '#cbd5e1'}
+
+    estilos_base = {'backgroundColor': tema['bg_page'], 'color': tema['text']}
+    estilo_panel = {'backgroundColor': tema['bg_panel'], 'border': f'1px solid {tema["border"]}'}
+    btn_style.update({'padding': '10px 20px', 'borderRadius': '8px'})
+
+    # Dados Filtrados Gerais
+    df_filtrado = df_jobs[df_jobs['Industry'] == industry_selecionada]
+
+    # Agrupamento da Matriz (Uma bolinha = Um Cargo)
+    df_matriz = df_filtrado.groupby('Job_Title').agg({
+        'Risco_IA_Porcentagem': 'mean',
+        'Job_Growth_2030': 'mean',
+        'Average_Salary_USD': 'mean'
+    }).reset_index()
+
+    # Convertendo Salários da Matriz para Reais em tempo real para exibir nas bolinhas
+    df_matriz['Salario_Reais'] = df_matriz['Average_Salary_USD'] * usd_hoje
+
+    def classificar_risco(risco):
+        if risco <= 33:
+            return 'Baixo Risco'
+        elif risco <= 66:
+            return 'Risco Médio'
+        else:
+            return 'Alto Risco'
+
+    df_matriz['Impacto_da_IA'] = df_matriz['Risco_IA_Porcentagem'].apply(classificar_risco)
+
+    # Métricas Gerais para os Cartões
+    total_profissoes = df_matriz['Job_Title'].nunique()
+    media_risco = df_matriz['Risco_IA_Porcentagem'].mean()
+    media_setor_brl = df_matriz['Average_Salary_USD'].mean() * usd_hoje
+
+    # Cartões Atualizados
+    card_total_content = [
+        html.P("PROFISSÕES ANALISADAS",
+               style={'margin': '0 0 8px 0', 'fontSize': '12px', 'fontWeight': '600', 'color': tema['text_muted']}),
+        html.H2(f"{total_profissoes} cargos", style={'margin': '0', 'fontSize': '28px', 'color': tema['text']})
+    ]
+    card_total_style = {**estilo_panel, 'flex': '1', 'padding': '24px', 'borderRadius': '12px',
+                        'borderLeft': f'4px solid {tema["accent"]}'}
+
+    card_risk_content = [
+        html.P("RISCO MÉDIO DO SETOR",
+               style={'margin': '0 0 8px 0', 'fontSize': '12px', 'fontWeight': '600', 'color': tema['text_muted']}),
+        html.H2(f"{media_risco:.0f}%",
+                style={'margin': '0', 'fontSize': '28px', 'color': '#ef4444' if media_risco > 50 else '#f59e0b'})
+    ]
+    card_risk_style = {**estilo_panel, 'flex': '1', 'padding': '24px', 'borderRadius': '12px',
+                       'borderLeft': '4px solid #ef4444'}
+
+    card_usd_content = [
+        html.P("MÉDIA SALARIAL (Em Reais)",
+               style={'margin': '0 0 8px 0', 'fontSize': '12px', 'fontWeight': '600', 'color': tema['text_muted']}),
+        html.H2(f"R$ {media_setor_brl:,.2f}", style={'margin': '0', 'fontSize': '28px', 'color': '#10b981'})
+    ]
+    card_usd_style = {**estilo_panel, 'flex': '1', 'padding': '24px', 'borderRadius': '12px',
+                      'borderLeft': '4px solid #10b981'}
+
+    # 1. Gráfico Matriz
+    fig_matriz = px.scatter(
+        df_matriz, x="Risco_IA_Porcentagem", y="Job_Growth_2030",
+        color="Impacto_da_IA", size="Salario_Reais",  # O tamanho agora baseia-se na coluna em Reais
+        hover_name="Job_Title",
+        hover_data={
+            "Risco_IA_Porcentagem": ':.0f',
+            "Salario_Reais": ':,.2f',  # Formatação exata com vírgula e 2 casas decimais
+            "Impacto_da_IA": False,
+            "Job_Growth_2030": False
+        },
+        title="Ato 1: Onde estão as Oportunidades e os Perigos?",
+        color_discrete_map={'Baixo Risco': '#10b981', 'Risco Médio': '#f59e0b', 'Alto Risco': '#ef4444'},
+        labels={
+            "Risco_IA_Porcentagem": "Risco da IA roubar a vaga (%)",
+            "Job_Growth_2030": "Crescimento de Vagas (%)",
+            "Salario_Reais": "Salário Anual (R$)",  # Traduzido
+            "Impacto_da_IA": "Impacto da IA"  # Limpo, sem underscore
         }
-        btn_text = '🌙 Dark Mode'
-        btn_style = {'backgroundColor': '#e0e0e0', 'color': '#2c3e50'}
+    )
+    fig_matriz.update_layout(margin={"r": 20, "t": 50, "l": 40, "b": 40}, paper_bgcolor=tema['bg_panel'],
+                             plot_bgcolor=tema['bg_panel'], font_color=tema['text'],
+                             title_font=dict(size=14, weight='bold'))
+    fig_matriz.update_xaxes(showgrid=True, gridcolor=tema['border'])
+    fig_matriz.update_yaxes(showgrid=True, gridcolor=tema['border'])
 
-    # Estilos Baseados no Tema
-    estilo_page = {'backgroundColor': tema['bg_page'], 'color': tema['text'], 'padding': '20px 40px',
-                   'fontFamily': 'Arial, sans-serif', 'minHeight': '100vh', 'transition': '0.3s'}
-    estilo_panel = {'backgroundColor': tema['bg_panel'], 'padding': '20px', 'borderRadius': '6px',
-                    'border': f'1px solid {tema["border"]}', 'boxShadow': '0 2px 4px rgba(0,0,0,0.05)',
-                    'transition': '0.3s'}
+    # 2. Profissões do Futuro
+    df_cargos = df_filtrado.groupby('Job_Title')['Demanda_Porcentagem'].mean().reset_index().nlargest(5,
+                                                                                                      'Demanda_Porcentagem')
+    fig_top_jobs = px.bar(
+        df_cargos, x="Demanda_Porcentagem", y="Job_Title", orientation='h',
+        title="Ato 2: Profissões com Mais Futuro", color_discrete_sequence=[tema['accent']],
+        labels={"Demanda_Porcentagem": "Potencial de Contratação (%)", "Job_Title": ""}
+    )
+    fig_top_jobs.update_layout(margin={"r": 20, "t": 50, "l": 20, "b": 40}, paper_bgcolor=tema['bg_panel'],
+                               plot_bgcolor=tema['bg_panel'], font_color=tema['text'],
+                               title_font=dict(size=14, weight='bold'), yaxis={'categoryorder': 'total ascending'})
 
-    btn_style.update(
-        {'padding': '10px 20px', 'borderRadius': '20px', 'border': f'1px solid {tema["border"]}', 'cursor': 'pointer',
-         'fontWeight': 'bold', 'transition': '0.3s'})
+    # 3. Gráfico de Habilidades
+    skills = df_filtrado['Required_Skills'].dropna().astype(str).str.split(',').explode().str.strip()
+    df_skills = skills.value_counts().head(5).reset_index()
+    df_skills.columns = ['Habilidade', 'Qtd']
 
-    # Dados
-    df_filtrado = df_historico[df_historico['Ano'] == ano_selecionado]
-    df_top5 = df_filtrado.nlargest(5, 'Incidentes').sort_values('Incidentes', ascending=True)
-    df_evolucao = df_historico.groupby('Ano', as_index=False)['Incidentes'].sum()
+    fig_skills = px.bar(
+        df_skills, x="Qtd", y="Habilidade", orientation='h',
+        title="Ato 3: O que precisamos estudar hoje?", color_discrete_sequence=['#10b981'],
+        labels={"Qtd": "Vezes que a empresa exige", "Habilidade": ""}
+    )
+    fig_skills.update_layout(margin={"r": 20, "t": 50, "l": 20, "b": 40}, paper_bgcolor=tema['bg_panel'],
+                             plot_bgcolor=tema['bg_panel'], font_color=tema['text'],
+                             title_font=dict(size=14, weight='bold'), yaxis={'categoryorder': 'total ascending'})
 
-    # LGPD Status
-    estilo_lgpd = {'fontSize': '13.5px', 'lineHeight': '1.6', 'padding': '15px', 'backgroundColor': tema['bg_page'],
-                   'borderRadius': '4px', 'color': tema['text']}
-    if ano_selecionado < 2020:
-        texto_lgpd = f"Ano {ano_selecionado}: Cenário Pré-LGPD. Ausência de uma legislação nacional centralizada de proteção e fiscalização."
-        estilo_lgpd['borderLeft'] = '4px solid #d35400'
-    elif ano_selecionado in [2020, 2021]:
-        texto_lgpd = f"Ano {ano_selecionado}: Vigência da LGPD. Em vigor no Brasil, há um salto nas notificações, pois as empresas passam a ser juridicamente obrigadas a reportar vazamentos à ANPD."
-        estilo_lgpd['borderLeft'] = '4px solid #c0392b'
+    # Mensagem Lateral (Alerta)
+    perc_upskill = (df_filtrado['Upskilling_Needed'] == 'Yes').mean() * 100
+    estilo_status = {'fontSize': '14px', 'lineHeight': '1.6', 'padding': '16px', 'backgroundColor': tema['bg_page'],
+                     'borderRadius': '8px', 'color': tema['text']}
+    if perc_upskill > 60:
+        texto_status = f"Atenção: {perc_upskill:.0f}% dos profissionais desta área vão perder espaço se não voltarem a estudar as tecnologias do gráfico 'Ato 3'."
+        estilo_status['borderLeft'] = '4px solid #ef4444'
     else:
-        texto_lgpd = f"Ano {ano_selecionado}: Cenário Pós-LGPD. Fase de maturação legal, adequação dos sistemas empresariais às políticas de governança."
-        estilo_lgpd['borderLeft'] = '4px solid #27ae60'
+        texto_status = f"Tranquilo: Cerca de {perc_upskill:.0f}% dos profissionais precisarão se atualizar. A maioria já possui as habilidades para trabalhar com IA."
+        estilo_status['borderLeft'] = '4px solid #f59e0b'
 
-    # Figuras
-    max_incidentes = df_historico['Incidentes'].max()
-
-    fig_mapa = px.choropleth_map(
-        df_filtrado, geojson=URL_GEOJSON_BRASIL, locations="Estado", featureidkey="properties.name",
-        color="Incidentes", color_continuous_scale="Blues", range_color=[0, max_incidentes],
-        map_style=tema['map'], center={"lat": -14.235, "lon": -53.925}, zoom=3.1, opacity=0.85,
-        title=f"Distribuição Geográfica - {ano_selecionado}"
-    )
-    fig_mapa.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0}, paper_bgcolor=tema['bg_panel'],
-                           plot_bgcolor=tema['bg_panel'], font_color=tema['text'])
-
-    fig_barras = px.bar(
-        df_top5, x="Incidentes", y="Estado", orientation="h", color="Incidentes",
-        color_continuous_scale="Blues", range_color=[0, max_incidentes], title=f"Top 5 Estados - {ano_selecionado}"
-    )
-    fig_barras.update_layout(margin={"r": 10, "t": 40, "l": 10, "b": 20}, paper_bgcolor=tema['bg_panel'],
-                             plot_bgcolor=tema['bg_panel'], font_color=tema['text'], showlegend=False,
-                             coloraxis_showscale=False, xaxis_title="Notificações", yaxis_title="")
-    fig_barras.update_xaxes(showgrid=True, gridwidth=1, gridcolor=tema['border'])
-
-    fig_linha = px.line(df_evolucao, x="Ano", y="Incidentes", markers=True, title="Evolução Nacional")
-    fig_linha.update_traces(line_color=tema['accent'], marker=dict(size=8, color=tema['accent']))
-    fig_linha.add_vline(x=ano_selecionado, line_width=2, line_dash="dash", line_color="#e74c3c")
-    fig_linha.update_layout(margin={"r": 10, "t": 40, "l": 10, "b": 20}, paper_bgcolor=tema['bg_panel'],
-                            plot_bgcolor=tema['bg_panel'], font_color=tema['text'], xaxis_title="",
-                            yaxis_title="Total Incidentes")
-    fig_linha.update_yaxes(showgrid=True, gridwidth=1, gridcolor=tema['border'])
-
-    return fig_mapa, fig_barras, fig_linha, texto_lgpd, estilo_lgpd, estilo_page, estilo_panel, estilo_panel, estilo_panel, estilo_panel, btn_text, btn_style
+    return fig_matriz, fig_top_jobs, fig_skills, texto_status, estilo_status, card_total_content, card_total_style, card_risk_content, card_risk_style, card_usd_content, card_usd_style, estilos_base, estilo_panel, estilo_panel, estilo_panel, estilo_panel, btn_text, btn_style
 
 
 if __name__ == '__main__':
