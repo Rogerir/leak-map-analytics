@@ -28,10 +28,10 @@ O projeto adota uma abordagem de *Storytelling de Dados*, dividido em três "Ato
 \`\`\`text
 leak-map-analytics/
 ├── data/
-│   └── AI_Impact_on_Jobs_2030.csv    # Base de dados principal
-├── app.py                            # Código-fonte do Dashboard Dash
-├── requirements.txt                  # Dependências do projeto
-└── README.md                        # Documentação
+│   └── AI_Impact_on_Jobs_2030.csv
+├── app.py
+├── requirements.txt
+└── README.md
 \`\`\`
 
 ## Como Executar o Projeto Localmente
