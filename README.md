@@ -23,17 +23,6 @@ O projeto adota uma abordagem de *Storytelling de Dados*, dividido em três "Ato
 *   **Pandas:** Manipulação, limpeza e agregação dos dados do arquivo CSV.
 *   **Requests:** Consumo de API externa para cotação de moedas.
 
-## Estrutura do Projeto
-
-\`\`\`text
-leak-map-analytics/
-├── data/
-│   └── AI_Impact_on_Jobs_2030.csv
-├── app.py
-├── requirements.txt
-└── README.md
-\`\`\`
-
 ## Como Executar o Projeto Localmente
 
 1. **Clone o repositório:**
