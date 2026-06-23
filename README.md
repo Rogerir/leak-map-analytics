@@ -31,7 +31,7 @@ leak-map-analytics/
 │   └── AI_Impact_on_Jobs_2030.csv    # Base de dados principal
 ├── app.py                            # Código-fonte do Dashboard Dash
 ├── requirements.txt                  # Dependências do projeto
-└── README.md                         # Documentação
+└── README.md                        # Documentação
 \`\`\`
 
 ## Como Executar o Projeto Localmente
